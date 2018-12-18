@@ -97,10 +97,10 @@ class Chord_Converter():
 
             #对于每个和弦范围的根音
             for base in data_base_num:
-                #对于和弦范围每个
+                #对于和弦范围每个base_list,增加plus音程v，变成plus音高list
                 temp_list = base + v
 
-                #如果plus音的indices序列（也就是音高序列）第一个大于12，则第一个减去12应该也被加进去
+                #如果plus音的indices序列（也就是音高list）第一个音高大于等于12，说明最后一个会大于127，那整体移低1个八度
                 if temp_list[0] >= 12:
                     temp_list  = temp_list - 12
 
@@ -141,14 +141,14 @@ class Chord_Converter():
 
         return data_chor_third, data_chor_plus, data_chor_final
 
-    def convert_data_chor(self, data_all_track, data_chor_third, data_chor_plus, data_chor_final, conv_trac_num=[0,1,4.5,6,7,8,9,10,11,12,13,14,15,16,17,18]):
+    def convert_data_chor(self, data_all_track, data_chor_final, conv_trac_num=[0,1,4.5,6,7,8,9,10,11,12,13,14,15,16,17,18]):
         '''
 
         :param data_all_track:
         :param data_chor_third:
         :param data_chor_plus:
         :param data_chor_final:
-        :return:
+        :return:不返回，运行的结果就是修改data_all_track
         '''
         # converted_data = []
         base_dic = const.BASE_DIC
@@ -172,12 +172,13 @@ class Chord_Converter():
             base_t = chor_t[:2]
             base_o_num = np.array(base_dic[base_o])
             base_t_num = np.array(base_dic[base_t])
-            third_t = third_note_dic[chor_t[2]]
             third_o = third_note_dic[chor_o[2]]
-            fifth_t = fifth_note_dic[chor_t[3]]
-            fifth_o = fifth_note_dic[chor_o[3]]
+            third_t = third_note_dic[chor_t[2]]
+            fifth_o = fifth_note_dic[chor_o[2]]
+            fifth_t = fifth_note_dic[chor_t[2]]
+            # seventh_o = seventh_note_dic[chor_o[3]]
+            # seventh_t = seventh_note_dic[chor_t[3]]
             third_o_num = base_o_num+third_o
-
             #比如B和弦的3音是D，如果按照B的音高list加三音音程，需要统一降低一个八度
             if third_o_num[0] >= 12:
                 third_o_num  = third_o_num -12
@@ -186,20 +187,67 @@ class Chord_Converter():
                 fifth_o_num = fifth_o_num - 12
 
 
+            #算出目标和弦与原本和弦的根音距离
             base_dist = (base_t_num[0] - base_o_num[0])%12
 
-            #计算origin到target和弦的根音中音高最近的距离，比如C到F#距离为6，C到G的距离则为-5
-            if abs(base_dist) <= 6:
-                pass
-            else:
+            #将上述距离转化为音高最近的距离，比如C到F#距离为6，C到G的距离则为-5
+            if abs(base_dist) > 6:
                 b = 12-abs(base_dist)
                 if base_dist >0:
-                    base_dist = b
-                else:
                     base_dist = -b
+                else:
+                    base_dist = b
 
+            #计算目标和弦与原本和弦的三音、五音、七音与根音音程之间的区别
             third_dist = third_t - third_o
             fifth_dist = fifth_t - fifth_o
+            # seventh_dist = seventh_t - seventh_o
+
+            # #目标和弦与原本和弦的七音音程之差可能大于6，比如11与0的差为11，
+            # if abs(seventh_dist) >= 6:
+            #     b = 12-abs(seventh_dist)
+            #     if seventh_dist >0:
+            #         seventh_dist = -b
+            #     else:
+            #         seventh_dist = b
+
+            #根据该和弦范围，切分该范围的各轨数据
+            data_all_track_thischor = data_all_track[:,self.chor_range_li[i][0]:self.chor_range_li[i][1]]
+
+            # 针对选定轨的每轨数据,修改三音、五音，再根据根音距离修改所有音高
+            for tr_id in conv_trac_num:
+                data_one_track_thischor = data_all_track_thischor[tr_id]
+
+                #修改三音音高
+                for i in range(len(data_one_track_thischor[third_o_num])):
+                    row = data_one_track_thischor[third_o_num][i]
+                    #修改三音头音音高
+                    row = [x+third_dist if x>1 and x<=127 else x for x in row]
+                    #把超过0-127范围的音高数值改回去
+                    row = [x+12 if x<0 else x for x in row]
+                    row = [x-12 if x>127 else x for x in row]
+                    data_one_track_thischor[third_o_num][i]=row
+
+                #修改五音音高
+                for i in range(len(data_one_track_thischor[fifth_o_num])):
+                    row = data_one_track_thischor[fifth_o_num][i]
+                    #修改五音头音音高
+                    row = [x+fifth_dist if x>1 and x<=127 else x for x in row]
+                    row = [x+12 if x<0 else x for x in row]
+                    row = [x-12 if x>127 else x for x in row]
+                    data_one_track_thischor[fifth_o_num][i]=row
+
+                #根据根音距离修改所有音高
+                for i in range(len(data_one_track_thischor)):
+                    row = data_one_track_thischor[i]
+                    row = [x+base_dist if x>1 and x<=127 else x for x in row]
+                    row = [x+12 if x<0 else x for x in row]
+                    row = [x-12 if x>127 else x for x in row]
+                    data_one_track_thischor[i]=row
+
+                data_all_track_thischor[tr_id]=data_one_track_thischor
+
+            data_all_track[:, self.chor_range_li[i][0]:self.chor_range_li[i][1]] = data_all_track_thischor
 
 
 
@@ -207,35 +255,5 @@ class Chord_Converter():
 
 
 
-
-
-        # 针对选定轨的每轨数据
-        for tr_id in conv_trac_num:
-            data_one_track = data_all_track[tr_id]
-            # one_track_converted = []
-
-            # # 针对每个和弦范围
-            # for i in range(len(self.chor_li)):
-            #     chor_target = self.chor_li[i]
-            #     chor_origin = data_chor_final[i]
-            #     chor_r = self.chor_range_li[i]
-            #
-            #     #C_MS中的前两位，就是根音名
-            #     base_t = chor_target[:2]
-            #     base_o = chor_origin[:2]
-            #
-            #     #C_MS中的第三位，大小减
-            #     type_t = chor_target[2]
-            #     type_o = chor_origin[2]
-            #
-            #     #C_MS中的第三位，
-            #     seven_t = chor_target[3]
-            #     seven_o = chor_origin[3]
-            #
-            #     d = data_one_track[:,chor_r[0]:chor_r[1]]
-            #
-            #     for i in range(len(d)):
-            #         for j in range(len(d[i])):
-            #             if d[i][j] == i
 
 

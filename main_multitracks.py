@@ -29,7 +29,7 @@ from data2note import *
    18,  '音效'
 '''
 
-file_name_list = ['origin000000290_t6_1002']
+file_name_list = ['decoded_22','decoded_18']
 bpm = 120
 unit_time = bpm_to_unit_time(bpm)
 
